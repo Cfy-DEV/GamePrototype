@@ -4,24 +4,41 @@ local sti = require("libs.sti")
 local wf = require("libs.windfield")
 local lg = love.graphics
 local i = 0
+local maps = {}
 
-function module.load(mapFile)
-	if i ~= 0 then
-		currentWorld:destroy()
+local function getLayerByName(map, layerName)
+	if type(map) ~= "table" or type(map.layers) ~= "table" then
+		return nil
 	end
-	lg.push()
-	local map = sti(mapFile)
-	currentMap = map
-	if map.layers["Objects"] then
-		local objX, objY = getMapLayerObjectRealPosition(map.layers["Objects"], "PlayerSpawn")
-		if objX or objY then
-			currentPlayer.collider:setPosition(objX, objY)
+
+	for _, layer in ipairs(map.layers) do
+		if layer and layer.name == layerName then
+			return layer
 		end
 	end
-	if map.layers["Collisions"] then
-		for _, info in pairs(map.layers["Collisions"].objects) do
+
+	return nil
+end
+
+local function load(map)
+	if game.world and game.world.box2d_world then
+		game.world:destroy()
+	end
+	game.world = wf.newWorld()
+	game.signals.mapReset:fire()
+
+	local objectsLayer = getLayerByName(map, "Objects")
+	if objectsLayer and objectsLayer.objects then
+		local objX, objY = getMapLayerObjectRealPosition(objectsLayer, "PlayerSpawn")
+		if objX ~= nil and objY ~= nil then
+			game.player.collider:setPosition(objX, objY)
+		end
+	end
+	local collisionsLayer = getLayerByName(map, "Collisions")
+	if collisionsLayer and collisionsLayer.objects then
+		for _, info in pairs(collisionsLayer.objects) do
 			if not (info.width == 0 or info.height == 0) then
-				local wall = currentWorld:newRectangleCollider(
+				local wall = game.world:newRectangleCollider(
 					info.x * conf.MapScale,
 					info.y * conf.MapScale,
 					info.width * conf.MapScale,
@@ -31,29 +48,72 @@ function module.load(mapFile)
 			end
 		end
 	end
-	lg.pop()
-	return function()
+end
+
+function module.load(mapName)
+	local find = maps[mapName]
+	if find then
+		message = "found!"
+		game.map.name = mapName
+		game.map.draw = find.draw
+		game.map.update = find.update
+		game.map.map = find.map
+		game.drawOrder.layers.map:add(find.draw, "Map")
+		load(find.map)
+		return find.map, find.draw, find.update
+	else
+		message = "not found!"
+	end
+	local mapFile = require("Maps." .. mapName)
+	if not mapFile then
+		return
+	end
+	local map = sti(mapFile)
+	game.map.map = map
+	load(map)
+	i = 1
+	local draw = function()
 		lg.setColor(1, 1, 1, 1)
-		if currentMap ~= nil then
-			if currentMap.layers["Background"] then
-				currentMap:drawLayer(currentMap.layers["Background"])
+		if map ~= nil then
+			local backgroundLayer = getLayerByName(map, "Background")
+			local pathLayer = getLayerByName(map, "Path")
+			local mapLayer = getLayerByName(map, "Map")
+			local decoLayer = getLayerByName(map, "Deco")
+			local deco2Layer = getLayerByName(map, "Deco2")
+
+			if backgroundLayer then
+				map:drawLayer(backgroundLayer)
 			end
-			if currentMap.layers["Path"] then
-				currentMap:drawLayer(currentMap.layers["Path"])
+			if pathLayer then
+				map:drawLayer(pathLayer)
 			end
-			if currentMap.layers["Map"] then
-				currentMap:drawLayer(currentMap.layers["Map"])
+			if mapLayer then
+				map:drawLayer(mapLayer)
 			end
-			if currentMap.layers["Deco"] then
-				currentMap:drawLayer(currentMap.layers["Deco"])
+			if decoLayer then
+				map:drawLayer(decoLayer)
 			end
-			if currentMap.layers["Deco2"] then
-				currentMap:drawLayer(currentMap.layers["Deco2"])
+			if deco2Layer then
+				map:drawLayer(deco2Layer)
 			end
 		end
-	end, function(dt)
-		map:update(dt)
 	end
+	local update = function(dt)
+		if map and map.update then
+			map:update(dt)
+		end
+	end
+	maps[mapName] = {
+		map = map,
+		draw = draw,
+		update = update,
+	}
+	game.map.name = mapName
+	game.map.draw = draw
+	game.map.update = update
+	game.map.map = map
+	game.drawOrder.layers.map:add(draw, "Map")
+	return map, draw, update
 end
 
 return module
