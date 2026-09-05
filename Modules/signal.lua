@@ -23,7 +23,7 @@ end
 
 function Signal:fire(...)
     for _, connection in ipairs(self.connections) do
-        connection(...)
+        connection(connection, ...)
     end
 end
 

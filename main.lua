@@ -42,6 +42,10 @@ local function generateUUID()
 	end)
 end
 
+function lerp(a, b, c)
+	return a + (b - a) * c
+end
+	
 function getBoolAxis(positive, negative)
 	local a = positive and 1 or 0
 	local b = negative and 1 or 0
@@ -83,12 +87,24 @@ function love.load()
 	game.drawOrder:newLayer("map", 2)
 	game.drawOrder:newLayer("objects", 3)
 	game.drawOrder:newLayer("interface", 4)
+	game.drawOrder:newLayer("debug", 5)
+	game.drawOrder.layers.objects:add(function ()
+		if game.world ~= nil then
+			--game.world:draw(1)
+		end
+	end, "windfield")
 	game.drawOrder.layers.interface.relativeToCamera = false
 	game.updateThreads.threads.world:add(function(dt)
 		if game.world ~= nil and game.world.box2d_world ~= nil then
 			game.world:update(dt)
 		end
 	end, "windfield")
+	game.drawOrder.layers.debug:add(function()
+		for i, v in pairs(squares) do
+			lg.rectangle("fill", v.x, v.y, 50, 50)
+		end
+	end, "squares")
+	squares = {}
 	local plr = player.new(0, 0)
 	game.player = plr
 	game.updateThreads.threads.objects:add(plr, "Player")
@@ -122,6 +138,7 @@ local maps = {
 	[1] = "TESTTTTbutlua",
 	[2] = "Startermap",
 	[3] = "test2",
+	[4] = "freeslopmaplol"
 }
 
 local bruhuhuh = 1

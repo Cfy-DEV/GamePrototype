@@ -1,0 +1,14 @@
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store
+
+# Love2D
+*.love
+
+# Build artifacts
+bin/
+
+# Lua rocks
+luarocks-
+

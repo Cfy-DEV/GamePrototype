@@ -33,11 +33,13 @@ local jump_db = false
 
 function methods:reset(x, y)
 	local newSelf = setmetatable({
+		lastPosition = {x = 0, y = 0},
 		currentSprite = spriteSheet,
 		currentAnimation = nil,
 		overHealth = 25,
 		maxHealth = 100,
 		health = 100,
+		updateCamera = true,
 		position = {
 			x = 0,
 			y = 0,
@@ -86,9 +88,10 @@ function methods:reset(x, y)
 		lastDirection = "down",
 	}, methods)
 	newSelf:createCollider(x or 0, y or 0)
-	game.signals.mapReset:connect(function()
+	local con = function(con)
 		newSelf:createCollider(newSelf.position.x, newSelf.position.y)
-	end)
+	end
+	game.signals.mapReset:connect(con)
 	local healthBarSize = { x = 300, y = 25 }
 	game.drawOrder.layers.interface:add(function()
 		local screenSizeX, screenSizeY = lg.getDimensions()
@@ -120,17 +123,22 @@ function methods:reset(x, y)
 		lg.rectangle("fill", pX + 2, pY + 2, Rsize, healthBarSize.y - 4)
 		--
 	end, "HealthBar")
+	self = nil
+	self = newSelf
 	local deathAnim = anim8.newAnimation(grid2("1-3", "1-3"), 1 / 8, false)
-	newSelf.signals.death:connect(function()
+	newSelf.signals.death:connect(function(con2)
 		newSelf.currentSprite = death_spriteSheet
 		newSelf.currentAnimation = deathAnim
 		deathAnim.onLoop = function()
 			game.signals.playerDied:fire(newSelf)
 			deathAnim:pauseAtEnd()
+			if self.collider.body ~= nil then
+				self.collider:destroy()
+			end
 		end
+		newSelf.signals.death:disconnect(con2)
+		game.signals.mapReset:disconnect(con)
 	end)
-	self = nil
-	self = newSelf
 	return self
 end
 
@@ -142,7 +150,12 @@ function methods:update(dt)
 	local xAxis = getBoolAxis(love.keyboard.isDown("d"), love.keyboard.isDown("a"))
 	local shift = love.keyboard.isDown("rshift") or love.keyboard.isDown("lshift")
 	local yAxis = getBoolAxis(love.keyboard.isDown("s"), love.keyboard.isDown("w"))
-	if not (self.states.stunned or self.states.dead) then
+	if xAxis ~= 0 and yAxis ~= 0 then
+		local length = math.sqrt(xAxis * xAxis + yAxis * yAxis)
+		xAxis = xAxis / length
+		yAxis = yAxis / length
+	end
+	if not (self.states.stunned or self.states.dead) and self.collider ~= nil then
 		if yAxis ~= 0 or xAxis ~= 0 then
 			if not shift then
 				self.states.running = false
@@ -164,8 +177,8 @@ function methods:update(dt)
 				spd = 150
 			end
 		end
+		self.collider:setLinearVelocity(spd * xAxis, spd * yAxis)
 	end
-	self.collider:setLinearVelocity(spd * xAxis, spd * yAxis)
 	local highestPriorityState = nil
 	local x = 0
 	for i, v in pairs(self.states) do
@@ -182,8 +195,16 @@ function methods:update(dt)
 		end
 		::continue::
 	end
+	if highestPriorityState == "running" or highestPriorityState == "walking" then
+		local bool1 =
+			self.position.x == self.lastPosition.x
+			and self.position.y == self.lastPosition.y
+		if bool1 then
+			highestPriorityState = "idle"
+		end
+	end
 	local currentAnimationRepo = self.animations[highestPriorityState]
-	if currentAnimationRepo then
+	if currentAnimationRepo and (not self.states.dead and not self.states.stunned) then
 		if yAxis ~= 0 or xAxis ~= 0 then
 			if yAxis > 0 then
 				self.lastDirection = "down"
@@ -206,18 +227,54 @@ function methods:update(dt)
 		end
 	end
 	::continue::
-	local obj = self.collider.body
-	local x, y = obj:getPosition()
+	local x, y
+	if not self.collider.body then
+		x = self.position.x
+		y = self.position.y
+	else
+		local obj = self.collider.body
+		x, y = obj:getPosition()
+	end
+	self.lastPosition.x = self.position.x
+	self.lastPosition.y = self.position.y
 	self.position.x = x
 	self.position.y = y
-	if self.health < 1 then
-		self.collider:setLinearVelocity(0, 0)
-		self.collider:setType("kinematic")
+	if self.health < 1 and (not self.states.dead and not self.states.stunned) then
+		if self.collider.body ~= nil then
+			self.collider:setType("kinematic")
+			self.collider:setLinearVelocity(0, 0)
+		end
 		self.states.dead = true
 		self.signals.death:fire()
 	end
-	game.camera.x = x
-	game.camera.y = y
+
+	local pX, pY = x + (xAxis * spd), y + (yAxis * spd)
+	if self.updateCamera then
+		local lerpX, lerpY = lerp(game.camera.x, pX, dt * 1.41), lerp(game.camera.y, pY, dt * 1.41)
+		game.camera.x = lerpX
+		game.camera.y = lerpY
+	end
+
+	game.drawOrder.layers.objects:add(function()
+		lg.rectangle("fill", pX, pY, 5, 5)
+	end, "HELLO")
+end
+
+function methods:spawnAnimation()
+	local spawnAnim = anim8.newAnimation(grid2("3-1", "3-1"), 1 / 8, false)
+	self.currentAnimation = spawnAnim
+	self.currentSprite = death_spriteSheet
+	self.states.stunned = true
+	local ended = false
+	spawnAnim.onLoop = function ()
+		if ended then
+			 return
+		end
+		ended = true
+		spawnAnim:pauseAtEnd()
+		self.states.stunned = false
+		self.currentSprite = spriteSheet
+	end
 end
 
 function methods:draw()

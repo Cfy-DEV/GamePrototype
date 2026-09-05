@@ -31,7 +31,11 @@ local function load(map)
 	if objectsLayer and objectsLayer.objects then
 		local objX, objY = getMapLayerObjectRealPosition(objectsLayer, "PlayerSpawn")
 		if objX ~= nil and objY ~= nil then
-			game.player.collider:setPosition(objX, objY)
+			game.camera.x = objX
+			game.camera.y = objY
+			if game.player ~= nil and game.player.collider ~= nil and game.player.collider.body ~= nil then
+				game.player.collider:setPosition(objX, objY)
+			end
 		end
 	end
 	local collisionsLayer = getLayerByName(map, "Collisions")
