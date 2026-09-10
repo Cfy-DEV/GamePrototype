@@ -5,17 +5,19 @@ methods.__index = methods
 
 local anim8 = require("libs.anim8")
 local lg = love.graphics
-local spriteSheet = lg.newImage("assets/potato_movement.png")
+local spriteSheet = lg.newImage("assets/potato_spritesheet.png")
 spriteSheet:setFilter("nearest", "nearest")
 local grid = anim8.newGrid(32, 32, spriteSheet:getWidth(), spriteSheet:getHeight())
-local death_spriteSheet = lg.newImage("assets/potato_death.png")
-death_spriteSheet:setFilter("nearest", "nearest")
-local grid2 = anim8.newGrid(32, 32, death_spriteSheet:getWidth(), death_spriteSheet:getHeight())
 
 local function createCollider(self, x, y)
-	self.collider = game.world:newBSGRectangleCollider(x or 0, y or 0, 24 * conf.MapScale, 16 * conf.MapScale, 15)
+	self.collider = game.world:newBSGRectangleCollider(x or 0, y or 0, 24 * conf.MapScale, 16 * conf.MapScale, math.min(8*conf.MapScale*conf.playerSpriteScale, 16))
 	self.collider:setType("dynamic")
 	self.collider:setFixedRotation(true)
+	game.world:addCollisionClass("Wall")
+    game.world:addCollisionClass("Teleporter")
+    game.world:addCollisionClass("Trigger")
+	game.world:addCollisionClass("Player", {ignores = {"Trigger", "Teleporter"}})
+	self.collider:setCollisionClass("Player")
 	return self.collider
 end
 
@@ -39,6 +41,7 @@ function methods:reset(x, y)
 		overHealth = 25,
 		maxHealth = 100,
 		health = 100,
+		cameraAlpha = 2,
 		updateCamera = true,
 		position = {
 			x = 0,
@@ -94,6 +97,7 @@ function methods:reset(x, y)
 	game.signals.mapReset:connect(con)
 	local healthBarSize = { x = 300, y = 25 }
 	game.drawOrder.layers.interface:add(function()
+		lg.push()
 		local screenSizeX, screenSizeY = lg.getDimensions()
 
 		--Background :
@@ -122,12 +126,12 @@ function methods:reset(x, y)
 		lg.setColor(0.15, 0.75, 0.2, 1)
 		lg.rectangle("fill", pX + 2, pY + 2, Rsize, healthBarSize.y - 4)
 		--
+		lg.pop()
 	end, "HealthBar")
 	self = nil
 	self = newSelf
-	local deathAnim = anim8.newAnimation(grid2("1-3", "1-3"), 1 / 8, false)
+	local deathAnim = anim8.newAnimation(grid("1-3", "5-7"), 1 / 8, false)
 	newSelf.signals.death:connect(function(con2)
-		newSelf.currentSprite = death_spriteSheet
 		newSelf.currentAnimation = deathAnim
 		deathAnim.onLoop = function()
 			game.signals.playerDied:fire(newSelf)
@@ -147,6 +151,10 @@ function methods:update(dt)
 		self.currentAnimation:update(dt)
 	end
 	local spd = 0
+	local zoomAxis = getBoolAxis(love.keyboard.isDown("z"), love.keyboard.isDown("x"))
+	if zoomAxis ~= 0 then
+		game.camera.scale = game.camera.scale + (zoomAxis*dt*1)
+	end
 	local xAxis = getBoolAxis(love.keyboard.isDown("d"), love.keyboard.isDown("a"))
 	local shift = love.keyboard.isDown("rshift") or love.keyboard.isDown("lshift")
 	local yAxis = getBoolAxis(love.keyboard.isDown("s"), love.keyboard.isDown("w"))
@@ -172,11 +180,12 @@ function methods:update(dt)
 		end
 		if self.states.running or self.states.walking then
 			if self.states.running then
-				spd = 250
-			elseif self.states.walking then
 				spd = 150
+			elseif self.states.walking then
+				spd = 80
 			end
 		end
+		spd = spd*conf.MapScale
 		self.collider:setLinearVelocity(spd * xAxis, spd * yAxis)
 	end
 	local highestPriorityState = nil
@@ -248,9 +257,10 @@ function methods:update(dt)
 		self.signals.death:fire()
 	end
 
-	local pX, pY = x + (xAxis * spd), y + (yAxis * spd)
+	--local pX, pY = x + (xAxis * spd / 2), y + (yAxis * spd / 2)
+	local pX, pY = x, y
 	if self.updateCamera then
-		local lerpX, lerpY = lerp(game.camera.x, pX, dt * 1.41), lerp(game.camera.y, pY, dt * 1.41)
+		local lerpX, lerpY = lerp(game.camera.x, pX, dt * self.cameraAlpha), lerp(game.camera.y, pY, dt * self.cameraAlpha)
 		game.camera.x = lerpX
 		game.camera.y = lerpY
 	end
@@ -261,9 +271,8 @@ function methods:update(dt)
 end
 
 function methods:spawnAnimation()
-	local spawnAnim = anim8.newAnimation(grid2("3-1", "3-1"), 1 / 8, false)
+	local spawnAnim = anim8.newAnimation(grid("3-1", "7-5"), 1 / 8, false)
 	self.currentAnimation = spawnAnim
-	self.currentSprite = death_spriteSheet
 	self.states.stunned = true
 	local ended = false
 	spawnAnim.onLoop = function ()
@@ -278,6 +287,7 @@ function methods:spawnAnimation()
 end
 
 function methods:draw()
+	lg.push()
 	local obj = self.collider.body
 	local x, y = obj:getPosition()
 	lg.setColor(1, 1, 1, 1)
@@ -289,6 +299,7 @@ function methods:draw()
 	end
 	lg.print("x : " .. x .. "y : " .. y, x, y - 40)
 	lg.print(message, x, y - 60)
+	lg.pop()
 end
 
 return player

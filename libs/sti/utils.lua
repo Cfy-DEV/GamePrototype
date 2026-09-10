@@ -193,13 +193,15 @@ end
 
 function utils.fix_transparent_color(tileset, path)
 	local image_data = love.image.newImageData(path)
-	tileset.image = love.graphics.newImage(image_data)
+	local currentImage = love.graphics.newImage(image_data)
+	currentImage:setFilter("nearest", "nearest")
+	tileset.image = currentImage
 
 	if tileset.transparentcolor then
 		utils._TC = utils.hex_to_color(tileset.transparentcolor)
 
 		image_data:mapPixel(utils.pixel_function)
-		tileset.image = love.graphics.newImage(image_data)
+		tileset.image = currentImage
 	end
 end
 

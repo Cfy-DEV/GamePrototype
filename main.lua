@@ -15,6 +15,10 @@ game.world = wf.newWorld()
 game.camera = camera.new(0, 0)
 game.drawOrder = drawOrder.new()
 game.updateThreads = updateThreads.new()
+game.mapAlpha = 1
+game.timer = require("libs.hump.timer")
+game.triggers = {}
+game.teleporters = {}
 game.map = {
 	map = nil,
 	name = nil,
@@ -24,6 +28,7 @@ game.map = {
 game.signals = {
 	mapReset = signal.new(),
 	playerDied = signal.new(),
+	dialogue = signal.new(),
 }
 
 local lg = love.graphics
@@ -42,14 +47,38 @@ local function generateUUID()
 	end)
 end
 
+
+
 function lerp(a, b, c)
 	return a + (b - a) * c
 end
-	
+
 function getBoolAxis(positive, negative)
 	local a = positive and 1 or 0
 	local b = negative and 1 or 0
 	return a - b
+end
+
+if not table.clone then
+	function table.clone(orig, seen)
+		if type(orig) ~= "table" then
+			return orig
+		end
+
+		if seen and seen[orig] then
+			return seen[orig]
+		end
+
+		local copy = {}
+		seen = seen or {}
+		seen[orig] = copy
+
+		for key, value in pairs(orig) do
+			copy[table.clone(key, seen)] = table.clone(value, seen)
+		end
+
+		return copy
+	end
 end
 
 function findObjectInMapLayer(layer, objectName)
@@ -83,13 +112,16 @@ function love.load()
 	game.updateThreads:newThread("objects")
 	game.updateThreads:newThread("maps")
 	game.updateThreads:newThread("world")
+	game.updateThreads:newThread("debug")
+	game.updateThreads:newThread("interface")
 	game.drawOrder:newLayer("background", 1)
 	game.drawOrder:newLayer("map", 2)
 	game.drawOrder:newLayer("objects", 3)
 	game.drawOrder:newLayer("interface", 4)
 	game.drawOrder:newLayer("debug", 5)
-	game.drawOrder.layers.objects:add(function ()
+	game.drawOrder.layers.objects:add(function()
 		if game.world ~= nil then
+			lg.setLineWidth(1)
 			--game.world:draw(1)
 		end
 	end, "windfield")
@@ -99,12 +131,6 @@ function love.load()
 			game.world:update(dt)
 		end
 	end, "windfield")
-	game.drawOrder.layers.debug:add(function()
-		for i, v in pairs(squares) do
-			lg.rectangle("fill", v.x, v.y, 50, 50)
-		end
-	end, "squares")
-	squares = {}
 	local plr = player.new(0, 0)
 	game.player = plr
 	game.updateThreads.threads.objects:add(plr, "Player")
@@ -138,7 +164,7 @@ local maps = {
 	[1] = "TESTTTTbutlua",
 	[2] = "Startermap",
 	[3] = "test2",
-	[4] = "freeslopmaplol"
+	[4] = "freeslopmaplol",
 }
 
 local bruhuhuh = 1
@@ -153,6 +179,8 @@ function love.update(dt)
 			mapToggle = not mapToggle
 			loadMap.load(maps[bruhuhuh])
 			if bruhuhuh == #maps then
+				local info = require("Modules.Dialogues.test1")
+				game.signals.dialogue:fire(info)
 				bruhuhuh = 1
 			else
 				bruhuhuh = bruhuhuh + 1

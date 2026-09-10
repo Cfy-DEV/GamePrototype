@@ -6,6 +6,20 @@ local lg = love.graphics
 local i = 0
 local maps = {}
 
+local function create_collider(info)
+	local wall
+	if not (info.width == 0 or info.height == 0) then
+		wall = game.world:newRectangleCollider(
+			info.x * conf.MapScale,
+			info.y * conf.MapScale,
+			info.width * conf.MapScale,
+			info.height * conf.MapScale
+		)
+		wall:setType("static")
+	end
+	return wall
+end
+
 local function getLayerByName(map, layerName)
 	if type(map) ~= "table" or type(map.layers) ~= "table" then
 		return nil
@@ -41,14 +55,31 @@ local function load(map)
 	local collisionsLayer = getLayerByName(map, "Collisions")
 	if collisionsLayer and collisionsLayer.objects then
 		for _, info in pairs(collisionsLayer.objects) do
-			if not (info.width == 0 or info.height == 0) then
-				local wall = game.world:newRectangleCollider(
-					info.x * conf.MapScale,
-					info.y * conf.MapScale,
-					info.width * conf.MapScale,
-					info.height * conf.MapScale
-				)
-				wall:setType("static")
+			local wall = create_collider(info)
+			if wall ~= nil then
+				wall:setCollisionClass("Wall")
+			end
+		end
+	end
+	local triggersLayer = getLayerByName(map, "Triggers")
+	if triggersLayer and triggersLayer.objects then
+		for _, info in pairs(triggersLayer.objects) do
+			local wall = create_collider(info)
+			if wall ~= nil then
+				wall:setCollisionClass("Trigger")
+				wall.name = info.name
+				table.insert(game.triggers, wall)
+			end
+		end
+	end
+	local teleportersLayer = getLayerByName(map, "Teleporters")
+	if teleportersLayer and teleportersLayer.objects then
+		for _, info in pairs(teleportersLayer.objects) do
+			local wall = create_collider(info)
+			if wall ~= nil then
+				wall:setCollisionClass("Teleporter")
+				wall.name = info.name
+				table.insert(game.teleporters, wall)
 			end
 		end
 	end
@@ -77,7 +108,7 @@ function module.load(mapName)
 	load(map)
 	i = 1
 	local draw = function()
-		lg.setColor(1, 1, 1, 1)
+		lg.setColor(1, 1, 1, game.mapAlpha)
 		if map ~= nil then
 			local backgroundLayer = getLayerByName(map, "Background")
 			local pathLayer = getLayerByName(map, "Path")

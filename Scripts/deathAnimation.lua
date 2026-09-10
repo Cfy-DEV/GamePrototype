@@ -1,7 +1,5 @@
 local loadMap = require "Modules.loadMap"
 local tween   = require "libs.tween"
-local timer = require "libs.hump.timer"
-local updateThreads = require "Modules.updateThreads"
 local module = {}
 
 function module.load()

@@ -7,6 +7,8 @@ function layer.new()
 		objects = {},
 		functions = {},
 		visible = true,
+		alpha = 1,
+		color = {1, 1, 1},
 		relativeToCamera = true,
 		drawOrder = "random",
 		nameToObject = {},
@@ -32,6 +34,8 @@ function layer_methods:update(dt)
 	end
 end
 
+local lg = love.graphics
+
 function layer_methods:draw()
 	if not self.visible then
 		return
@@ -42,6 +46,8 @@ function layer_methods:draw()
 	if self.relativeToCamera then
 		game.camera:attach()
 	end
+	lg.push()
+    love.graphics.setColor(self.color[1], self.color[2], self.color[3], self.alpha)
 	if order == "random" then
 		for _, obj in pairs(objects) do
 			obj:draw()
@@ -67,6 +73,7 @@ function layer_methods:draw()
 	if self.relativeToCamera then
 		game.camera:detach()
 	end
+	lg.pop()
 end
 
 function layer_methods:add(obj, name)

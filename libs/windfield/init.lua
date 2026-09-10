@@ -143,7 +143,7 @@ function World:setExplicitCollisionEvents(value)
 end
 
 function World:addCollisionClass(collision_class_name, collision_class)
-    if self.collision_classes[collision_class_name] then error('Collision class ' .. collision_class_name .. ' already exists.') end
+    if self.collision_classes[collision_class_name] then return end
 
     if self.explicit_collision_events then
         self.collision_classes[collision_class_name] = collision_class or {}
